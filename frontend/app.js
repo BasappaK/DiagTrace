@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
     setupEventListeners();
+    setupErrorLogging();
     checkEngineStatus();
     loadRegistryData();
     
@@ -277,7 +278,14 @@ function fetchDirectoryContents(targetPath) {
     }
     
     fetch(url)
-        .then(res => res.json())
+        .then(async res => {
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                const detail = errData.detail || `HTTP error ${res.status}`;
+                throw new Error(detail);
+            }
+            return res.json();
+        })
         .then(data => {
             appState.currentExplorerPath = data.current_path;
             elements.explorerCurrentPath.innerText = data.current_path;
@@ -322,7 +330,7 @@ function fetchDirectoryContents(targetPath) {
             elements.explorerBtnSelect.dataset.folderSource = "server";
         })
         .catch(err => {
-            console.error("Directory browse error:", err);
+            logErrorToConsole("Browse Server Directories", err);
             showToast("Failed to browse server directories.", "error");
         });
 }
@@ -364,7 +372,14 @@ function toggleLogsMinimization() {
 
 function checkEngineStatus() {
     fetch('/api/status')
-        .then(res => res.json())
+        .then(async res => {
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                const detail = errData.detail || `HTTP error ${res.status}`;
+                throw new Error(detail);
+            }
+            return res.json();
+        })
         .then(status => {
             if (status.is_processing) {
                 elements.folderPathInput.value = status.current_folder || "";
@@ -378,12 +393,19 @@ function checkEngineStatus() {
                 updateLogConsole(status.logs);
             }
         })
-        .catch(err => console.error("Error checking engine status:", err));
+        .catch(err => logErrorToConsole("Check Engine Status", err));
 }
 
 function loadRegistryData() {
     fetch('/api/data')
-        .then(res => res.json())
+        .then(async res => {
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                const detail = errData.detail || `HTTP error ${res.status}`;
+                throw new Error(detail);
+            }
+            return res.json();
+        })
         .then(result => {
             appState.allData = result.data || [];
             if (appState.allData.length > 0) {
@@ -397,7 +419,7 @@ function loadRegistryData() {
                 elements.resultsSection.classList.add('hidden');
             }
         })
-        .catch(err => console.error("Error loading registry data:", err));
+        .catch(err => logErrorToConsole("Load Diagnostics Data", err));
 }
 
 function startAnalysis() {
@@ -417,7 +439,14 @@ function startAnalysis() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ folder_path: folderPath })
     })
-    .then(res => res.json())
+    .then(async res => {
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const detail = errData.detail || `HTTP error ${res.status}`;
+            throw new Error(detail);
+        }
+        return res.json();
+    })
     .then(data => {
         if (data.status === 'started' || data.status === 'already_processing') {
             startPollingLogs();
@@ -430,7 +459,7 @@ function startAnalysis() {
     .catch(err => {
         elements.consoleSpinner.classList.add('hidden');
         elements.btnRunAnalysis.disabled = false;
-        appendLogLine({ message: `Connection error: ${err.message}`, level: "error", time: "" });
+        logErrorToConsole("Start Analysis Engine", err);
     });
 }
 
@@ -440,7 +469,14 @@ function startPollingLogs() {
     
     appState.pollIntervalId = setInterval(() => {
         fetch('/api/status')
-            .then(res => res.json())
+            .then(async res => {
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const detail = errData.detail || `HTTP error ${res.status}`;
+                    throw new Error(detail);
+                }
+                return res.json();
+            })
             .then(status => {
                 updateLogConsole(status.logs);
                 
@@ -450,16 +486,21 @@ function startPollingLogs() {
                     elements.consoleSpinner.classList.add('hidden');
                     elements.btnRunAnalysis.disabled = false;
                     
-                    if (status.processing_complete) {
+                    if (status.error_message) {
+                        showToast(`Analysis error: ${status.error_message}`, "error");
+                        logErrorToConsole("Analysis Engine Parsing", new Error(status.error_message));
+                    } else if (status.processing_complete) {
                         showToast("Diagnostic analysis complete! Data grid sync successful.");
                         loadRegistryData();
-                    } else if (status.error_message) {
-                        showToast(`Analysis error: ${status.error_message}`, "error");
                     }
                 }
             })
             .catch(err => {
-                console.error("Polling logs error:", err);
+                logErrorToConsole("Poll Logs Progress", err);
+                clearInterval(appState.pollIntervalId);
+                appState.isPolling = false;
+                elements.consoleSpinner.classList.add('hidden');
+                elements.btnRunAnalysis.disabled = false;
             });
     }, 800);
 }
@@ -484,7 +525,14 @@ function appendLogLine(log) {
 function resetParserEngine() {
     if (confirm("Are you sure you want to reset the current parser tracking state?")) {
         fetch('/api/reset', { method: 'POST' })
-            .then(res => res.json())
+            .then(async res => {
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    const detail = errData.detail || `HTTP error ${res.status}`;
+                    throw new Error(detail);
+                }
+                return res.json();
+            })
             .then(() => {
                 if (appState.pollIntervalId) {
                     clearInterval(appState.pollIntervalId);
@@ -499,7 +547,7 @@ function resetParserEngine() {
                 elements.selectedClientFilesCount.innerText = "No local folder selected.";
                 showToast("Parser state reset successfully.");
             })
-            .catch(err => console.error("Error resetting parser:", err));
+            .catch(err => logErrorToConsole("Reset Parser Engine", err));
     }
 }
 
@@ -873,7 +921,14 @@ function saveRowUpdate(rowIndex, updatePayload) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalPayload)
     })
-    .then(res => res.json())
+    .then(async res => {
+        if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            const detail = errData.detail || `HTTP error ${res.status}`;
+            throw new Error(detail);
+        }
+        return res.json();
+    })
     .then(result => {
         if (result.status === 'success') {
             // Update local state dynamically
@@ -908,14 +963,12 @@ function saveRowUpdate(rowIndex, updatePayload) {
             renderGridAndPagination();
             renderCharts();
         } else {
-            showToast("Failed to update database registry row.", "error");
-            if (rowEl) rowEl.classList.remove('row-updating');
-            renderGridAndPagination();
+            throw new Error("Invalid response status from server");
         }
     })
     .catch(err => {
-        console.error("Save row error:", err);
-        showToast("Network error. Row edits unsaved.", "error");
+        logErrorToConsole("Save Row Update", err);
+        showToast(`Save failed: ${err.message || err}`, "error");
         if (rowEl) rowEl.classList.remove('row-updating');
         renderGridAndPagination();
     });
@@ -1126,15 +1179,20 @@ function exportToExcel() {
 
 function showToast(message, type = "success") {
     elements.toastMessage.innerText = message;
+    const iconEl = elements.toast.querySelector('.toast-icon');
     
     if (type === "error") {
         elements.toast.style.borderColor = "var(--error)";
-        elements.toast.querySelector('.toast-icon').className = "fa-solid fa-triangle-exclamation toast-icon";
-        elements.toast.querySelector('.toast-icon').style.color = "var(--error)";
+        if (iconEl) {
+            iconEl.innerText = "⚠️";
+            iconEl.style.color = "var(--error)";
+        }
     } else {
         elements.toast.style.borderColor = "var(--success)";
-        elements.toast.querySelector('.toast-icon').className = "fa-solid fa-circle-check toast-icon";
-        elements.toast.querySelector('.toast-icon').style.color = "var(--success)";
+        if (iconEl) {
+            iconEl.innerText = "✅";
+            iconEl.style.color = "var(--success)";
+        }
     }
     
     elements.toast.classList.remove('hidden');
@@ -1170,4 +1228,29 @@ function getFolderName(path) {
     const isWindows = path.includes('\\');
     const parts = isWindows ? path.split('\\') : path.split('/');
     return parts.filter(Boolean).pop() || path;
+}
+
+// ----------------------------------------------------
+// Global Error Handlers & Visual Logging Consolidation
+// ----------------------------------------------------
+function setupErrorLogging() {
+    window.addEventListener('error', (event) => {
+        logErrorToConsole("Unhandled Runtime Exception", event.error || event.message);
+    });
+    window.addEventListener('unhandledrejection', (event) => {
+        logErrorToConsole("Unhandled Promise Rejection", event.reason);
+    });
+}
+
+function logErrorToConsole(errContext, err) {
+    console.error(`${errContext}:`, err);
+    elements.logConsoleContainer.classList.remove('hidden');
+    elements.logConsoleContainer.classList.remove('minimized');
+    
+    const message = err && err.message ? err.message : String(err);
+    appendLogLine({
+        message: `❌ [FRONTEND EXCEPTION] ${errContext}: ${message}`,
+        level: "error",
+        time: new Date().toTimeString().split(' ')[0]
+    });
 }

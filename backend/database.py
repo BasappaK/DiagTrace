@@ -24,25 +24,29 @@ def get_connection() -> sqlite3.Connection:
 def init_db():
     """Initializes the database schema if it does not exist."""
     with db_lock:
-        conn = get_connection()
-        cursor = conn.cursor()
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS diagnostics (
-                [index] INTEGER PRIMARY KEY AUTOINCREMENT,
-                File TEXT,
-                Module TEXT,
-                Code TEXT,
-                Description TEXT,
-                [Issue Status] TEXT,
-                Comments TEXT,
-                Author TEXT,
-                [Program name] TEXT,
-                [VIN Number] TEXT,
-                [Last Updated] TEXT
-            )
-        """)
-        conn.commit()
-        conn.close()
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS diagnostics (
+                    [index] INTEGER PRIMARY KEY AUTOINCREMENT,
+                    File TEXT,
+                    Module TEXT,
+                    Code TEXT,
+                    Description TEXT,
+                    [Issue Status] TEXT,
+                    Comments TEXT,
+                    Author TEXT,
+                    [Program name] TEXT,
+                    [VIN Number] TEXT,
+                    [Last Updated] TEXT
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error initializing DB: {e}")
+            raise RuntimeError(f"Database initialization failed: {str(e)}")
 
 def load_from_db() -> Optional[pd.DataFrame]:
     """Loads all diagnostics data from the database as a Pandas DataFrame."""
@@ -66,7 +70,7 @@ def load_from_db() -> Optional[pd.DataFrame]:
             return df
         except Exception as e:
             print(f"Error loading from SQLite: {e}")
-            return None
+            raise RuntimeError(f"Database load failed: {str(e)}")
 
 def save_to_db(df: pd.DataFrame):
     """Saves a DataFrame to the diagnostics database, overwriting the existing table."""
@@ -82,6 +86,7 @@ def save_to_db(df: pd.DataFrame):
             conn.close()
         except Exception as e:
             print(f"Error saving to SQLite: {e}")
+            raise RuntimeError(f"Database write failed: {str(e)}")
 
 def update_row(index: int, comments: str, issue_status: str, author: str) -> Optional[str]:
     """Updates the editable columns for a specific row index, returns the Last Updated timestamp."""
@@ -107,7 +112,7 @@ def update_row(index: int, comments: str, issue_status: str, author: str) -> Opt
             return last_updated
         except Exception as e:
             print(f"Error updating SQLite row {index}: {e}")
-            return None
+            raise RuntimeError(f"Database update failed: {str(e)}")
 
 def merge_and_deduplicate(new_df: pd.DataFrame) -> pd.DataFrame:
     """Merges new dataframe rows into the existing database entries, avoiding duplicate key combinations."""

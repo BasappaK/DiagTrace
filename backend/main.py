@@ -140,10 +140,15 @@ def get_data():
 
 @app.post("/api/update-row")
 def update_row_endpoint(payload: UpdateRowRequest):
-    last_updated = update_row(payload.index, payload.Comments, payload.Issue_Status, payload.Author)
-    if last_updated is None:
-        raise HTTPException(status_code=400, detail="Failed to update row: index not found or database error")
-    return {"status": "success", "last_updated": last_updated}
+    try:
+        last_updated = update_row(payload.index, payload.Comments, payload.Issue_Status, payload.Author)
+        if last_updated is None:
+            raise HTTPException(status_code=400, detail=f"Failed to update row: index {payload.index} not found in database")
+        return {"status": "success", "last_updated": last_updated}
+    except Exception as e:
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=f"Database update error: {str(e)}")
 
 @app.get("/api/browse")
 def browse_directory(path: Optional[str] = Query(None)):
@@ -182,32 +187,42 @@ def browse_directory(path: Optional[str] = Query(None)):
 
 @app.get("/api/export")
 def export_excel():
-    df = load_from_db()
+    try:
+        df = load_from_db()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load data for export: {str(e)}")
+    
     if df is None or df.empty:
         raise HTTPException(status_code=400, detail="No diagnostic data available to export")
     
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Diagnostic Report')
-    
-    buffer.seek(0)
-    filename = f"Diagnostic_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+    try:
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+            df.to_excel(writer, index=False, sheet_name='Diagnostic Report')
+        
+        buffer.seek(0)
+        filename = f"Diagnostic_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return StreamingResponse(
+            buffer,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate Excel file: {str(e)}")
 
 @app.post("/api/reset")
 def reset_state():
     global state
-    with state_lock:
-        state["is_processing"] = False
-        state["processing_complete"] = False
-        state["status_logs"] = []
-        state["error_message"] = None
-        state["current_folder"] = None
-    return {"status": "reset"}
+    try:
+        with state_lock:
+            state["is_processing"] = False
+            state["processing_complete"] = False
+            state["status_logs"] = []
+            state["error_message"] = None
+            state["current_folder"] = None
+        return {"status": "reset"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Reset state failed: {str(e)}")
 
 # Mount frontend files
 frontend_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
