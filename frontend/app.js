@@ -807,25 +807,26 @@ function renderGridAndPagination() {
         appState.columns.forEach(col => {
             const td = document.createElement('td');
             const cellValue = (row[col] !== undefined && row[col] !== null) ? row[col] : "";
+            td.title = cellValue;
             
             // Editable Column 1: Issue Status
             if (col === "Issue Status") {
                 td.className = "editable-cell";
                 const statusClass = String(cellValue).toLowerCase().replace(' ', '-');
                 td.innerHTML = `<span class="status-tag ${statusClass}">${cellValue}</span>`;
-                td.addEventListener('click', () => editStatusCell(td, row.index, cellValue, statusOptions));
+                td.addEventListener('dblclick', () => editStatusCell(td, row.index, cellValue, statusOptions));
             } 
             // Editable Column 2: Comments
             else if (col === "Comments") {
                 td.className = "editable-cell";
                 td.innerText = cellValue;
-                td.addEventListener('click', () => editTextFieldCell(td, row.index, 'Comments', cellValue));
+                td.addEventListener('dblclick', () => editTextFieldCell(td, row.index, 'Comments', cellValue));
             } 
             // Editable Column 3: Author
             else if (col === "Author") {
                 td.className = "editable-cell";
                 td.innerText = cellValue;
-                td.addEventListener('click', () => editTextFieldCell(td, row.index, 'Author', cellValue));
+                td.addEventListener('dblclick', () => editTextFieldCell(td, row.index, 'Author', cellValue));
             }
             // Non-editable columns
             else {

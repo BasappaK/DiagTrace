@@ -471,6 +471,9 @@ body {
     border-bottom: 1px solid var(--border-color);
     vertical-align: top;
     white-space: nowrap;
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* Column Filter Input / Dropdown */
@@ -509,6 +512,9 @@ body {
     border-bottom: 1px solid var(--border-color);
     white-space: nowrap;
     color: var(--text-primary);
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .data-table tbody tr:hover {
@@ -526,10 +532,17 @@ body {
     position: relative;
     cursor: pointer;
     background-color: rgba(59, 130, 246, 0.02);
+    transition: var(--transition);
 }
 
 .editable-cell:hover {
     background-color: rgba(59, 130, 246, 0.05);
+}
+
+.editable-cell:focus-within {
+    position: relative;
+    z-index: 100;
+    overflow: visible !important;
 }
 
 .cell-input,
@@ -542,6 +555,30 @@ body {
     font-size: 0.74rem;
     width: 100%;
     outline: none;
+    transition: var(--transition);
+}
+
+.editable-cell:focus-within .cell-input {
+    position: absolute;
+    min-width: 300px;
+    width: calc(100% + 180px);
+    max-width: 550px;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 101;
+    box-shadow: var(--shadow-lg);
+}
+
+.editable-cell:focus-within .cell-select {
+    position: absolute;
+    min-width: 180px;
+    width: 100%;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 101;
+    box-shadow: var(--shadow-lg);
 }
 
 .editable-cell:hover::after {
