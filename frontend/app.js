@@ -407,7 +407,27 @@ function loadRegistryData() {
             return res.json();
         })
         .then(result => {
-            appState.allData = result.data || [];
+            const rawData = result.data || [];
+            
+            // Safely convert numeric strings back to numbers if it won't lose precision
+            appState.allData = rawData.map(row => {
+                const cleanedRow = { ...row };
+                for (const key in cleanedRow) {
+                    if (cleanedRow.hasOwnProperty(key) && key !== 'index') {
+                        const val = cleanedRow[key];
+                        if (typeof val === 'string' && val.trim() !== '') {
+                            const num = Number(val);
+                            // Verify it's a valid finite number, and that converting it back to string
+                            // produces the identical string (prevents parsing precision loss for huge integer IDs)
+                            if (!isNaN(num) && isFinite(num) && String(num) === val.trim()) {
+                                cleanedRow[key] = num;
+                            }
+                        }
+                    }
+                }
+                return cleanedRow;
+            });
+            
             if (appState.allData.length > 0) {
                 elements.resultsSection.classList.remove('hidden');
                 

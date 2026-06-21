@@ -81,8 +81,14 @@ def save_to_db(df: pd.DataFrame):
             if df.index.name is None:
                 df.index.name = "index"
             
+            # Cast all non-index columns to string to avoid SQLite integer/numeric overflow
+            df_write = df.copy()
+            for col in df_write.columns:
+                df_write[col] = df_write[col].fillna("").astype(str)
+                df_write[col] = df_write[col].replace({"nan": "", "NaN": "", "None": "", "<NA>": ""})
+            
             # Save the dataframe
-            df.to_sql("diagnostics", conn, if_exists="replace", index=True, index_label="index")
+            df_write.to_sql("diagnostics", conn, if_exists="replace", index=True, index_label="index")
             conn.close()
         except Exception as e:
             print(f"Error saving to SQLite: {e}")
