@@ -819,13 +819,13 @@ function renderGridAndPagination() {
             // Editable Column 2: Comments
             else if (col === "Comments") {
                 td.className = "editable-cell";
-                td.innerText = cellValue;
+                td.innerText = String(cellValue).replace(/[\r\n]+/g, ' ');
                 td.addEventListener('dblclick', () => editTextFieldCell(td, row.index, 'Comments', cellValue));
             } 
             // Editable Column 3: Author
             else if (col === "Author") {
                 td.className = "editable-cell";
-                td.innerText = cellValue;
+                td.innerText = String(cellValue).replace(/[\r\n]+/g, ' ');
                 td.addEventListener('dblclick', () => editTextFieldCell(td, row.index, 'Author', cellValue));
             }
             // Non-editable columns
@@ -836,7 +836,7 @@ function renderGridAndPagination() {
                 } else if (col === "Code" || col === "VIN Number") {
                     td.className = "font-mono";
                 }
-                td.innerText = cellValue;
+                td.innerText = String(cellValue).replace(/[\r\n]+/g, ' ');
             }
             
             tr.appendChild(td);
