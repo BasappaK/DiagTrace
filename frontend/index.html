@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ DiagTrace - Enterprise Vehicle Diagnostics Portal</title>
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="style.css?v=2.1.0">
+    <!-- Local Chart.js (100% Offline Compatible) -->
+    <script src="chart.js"></script>
+</head>
+
+<body>
+    <header class="app-header">
+        <div class="header-logo">
+            <span class="logo-icon">⚡</span>
+            <span class="logo-text">Diag<span class="highlight">Trace</span></span>
+            <span class="version-badge">v2.1.0</span>
+        </div>
+        <div class="header-status">
+            <span id="db-status" class="status-indicator connected">
+                🗄️ Database Connected
+            </span>
+        </div>
+    </header>
+
+    <main class="app-container">
+        <!-- SECTION 1: INGESTION CONFIGURATION -->
+        <section class="card section-ingestion">
+            <div class="card-header">
+                <h2>📂 File Ingestion & Diagnostics Engine</h2>
+                <button id="btn-reset-db" class="btn btn-secondary btn-small"
+                    title="Reset current engine parsing state">
+                    🔄 Reset Parser
+                </button>
+            </div>
+
+            <div class="ingestion-controls">
+                <div class="input-group flex-fill">
+                    <label for="folder-path-input">Target Directory Path</label>
+                    <div class="input-with-action">
+                        <input type="text" id="folder-path-input"
+                            placeholder="Enter absolute folder path or browse..." />
+                        <button id="btn-browse-folder" class="btn btn-secondary" title="Browse and select folder">
+                            📂 Browse Folder...
+                        </button>
+                        <button id="btn-run-analysis" class="btn btn-primary" disabled>
+                            ▶️ Run Analysis
+                        </button>
+                    </div>
+                    <small class="helper-text">Specify where the raw vehicle log files (.txt) are located.</small>
+                </div>
+            </div>
+
+            <!-- LOG VIEWER: Box remains visible, scrolls log status, minimize option provided -->
+            <div id="log-console-container" class="log-console-container hidden">
+                <div class="console-header">
+                    <span>💻 Live Diagnostic Engine Output Logs</span>
+                    <div class="console-header-actions">
+                        <span id="console-spinner" class="spinner hidden"><span class="css-spinner"></span>
+                            Processing</span>
+                        <button id="btn-toggle-logs" class="btn-icon" title="Minimize/Maximize logs">➖</button>
+                    </div>
+                </div>
+                <div id="log-console" class="console-body">
+                    <div class="log-line system-msg">[SYSTEM] Diagnostic parser initialized. Ready to receive directory
+                        instructions.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: RESULTS SECTION (TABLE FIRST, THEN CHARTS) -->
+        <section id="results-section" class="results-section hidden">
+
+            <!-- Global Diagnostic Registry Grid -->
+            <div class="card grid-card">
+                <div class="card-header">
+                    <h2>📋 Diagnostic Data Detailed Report</h2>
+                    <div class="header-actions">
+                        <button id="btn-clear-filters" class="btn btn-secondary btn-small"
+                            title="Clear all active column filters">
+                            ❌ Clear Filters
+                        </button>
+                        <button id="btn-export-excel" class="btn btn-success btn-small">
+                            📄 Export to Excel
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Data Table Container with Dynamic Column Header Filters -->
+                <div class="table-container">
+                    <table class="data-table" id="registry-table">
+                        <thead>
+                            <tr id="table-headers-row" class="table-headers">
+                                <!-- Populated dynamically by app.js -->
+                            </tr>
+                        </thead>
+                        <tbody id="registry-table-body">
+                            <tr>
+                                <td colspan="10" class="no-data">No diagnostic logs parsed. Ingest directory path to
+                                    start.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Grid Pagination Controls -->
+                <div class="pagination-container">
+                    <div class="pagination-size">
+                        <label for="page-size-select">Rows per page:</label>
+                        <select id="page-size-select" class="mini-select">
+                            <option value="20">20</option>
+                            <option value="50" selected>50</option>
+                            <option value="100">100</option>
+                            <option value="250">250</option>
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+
+                    <div class="pagination-info" id="pagination-info-text">
+                        Showing 0-0 of 0 entries
+                    </div>
+
+                    <div class="pagination-nav">
+                        <button id="btn-page-prev" class="btn btn-icon" disabled>◀</button>
+                        <span id="page-num-display">Page 1 of 1</span>
+                        <button id="btn-page-next" class="btn btn-icon" disabled>▶</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Executive KPI Cards -->
+            <div class="kpi-grid">
+                <div class="kpi-card">
+                    <div class="kpi-info">
+                        <span class="kpi-title">Total DTC Records</span>
+                        <h3 id="kpi-total-records">0</h3>
+                    </div>
+                    <div class="kpi-icon blue">📄</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-info">
+                        <span class="kpi-title">Unique DTCs</span>
+                        <h3 id="kpi-unique-dtcs">0</h3>
+                    </div>
+                    <div class="kpi-icon teal">⚠️</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-info">
+                        <span class="kpi-title">Active Program modules</span>
+                        <h3 id="kpi-active-programs">0</h3>
+                    </div>
+                    <div class="kpi-icon purple">🚗</div>
+                </div>
+                <div class="kpi-card">
+                    <div class="kpi-info">
+                        <span class="kpi-title">Open Issue Statuses</span>
+                        <h3 id="kpi-open-issues">0</h3>
+                    </div>
+                    <div class="kpi-icon red">🚨</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Charts -->
+            <div class="charts-section">
+                <div class="charts-grid-header">
+                    <h2>📊 Sumamry Dashboard</h2>
+                </div>
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <h3>Top 20 DTCs by Count</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-top-dtc"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Top Modules by DTC Count</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-top-modules"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <h3>Module DTC Counts by Issue Status</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-status-modules"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>DTC Distribution by Program Name</h3>
+                        <div class="chart-wrapper">
+                            <canvas id="chart-program-distribution"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- MODAL FOR DIRECTORY BROWSER WITH SERVER/LOCAL TABS -->
+    <div id="explorer-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>📂 Select Folder Location</h3>
+                <span id="explorer-close" class="modal-close">&times;</span>
+            </div>
+
+            <!-- Unified tab selections inside dialog -->
+            <div class="modal-tabs">
+                <button id="tab-server" class="modal-tab active">🖥️ Server Filesystem</button>
+                <button id="tab-client" class="modal-tab">💻 Local Client Machine</button>
+            </div>
+
+            <div class="modal-body">
+                <!-- SERVER FILESYSTEM TAB VIEW -->
+                <div id="explorer-server-view" class="tab-view">
+                    <div class="explorer-address-bar">
+                        <button id="explorer-nav-up" class="btn btn-icon" title="Up to parent folder">⬆️</button>
+                        <button id="explorer-nav-home" class="btn btn-icon" title="Go to Project Root">🏠</button>
+                        <div id="explorer-current-path" class="current-path-display">C:\BK\07_web_apps\diag_trace</div>
+                    </div>
+                    <div class="explorer-layout">
+                        <div class="explorer-sidebar">
+                            <div class="sidebar-title">Quick Access</div>
+                            <button id="explorer-shortcut-workspace" class="btn btn-sidebar">💼 Project
+                                Workspace</button>
+                            <button id="explorer-shortcut-root" class="btn btn-sidebar">💾 System Drive</button>
+                            <button id="explorer-shortcut-user" class="btn btn-sidebar">👤 User Directory</button>
+                        </div>
+                        <div class="explorer-main">
+                            <div class="explorer-list-header">Name</div>
+                            <div id="explorer-items-container" class="explorer-items-container">
+                                <!-- Items populated dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LOCAL CLIENT MACHINE TAB VIEW -->
+                <div id="explorer-client-view" class="tab-view hidden">
+                    <div class="client-upload-container">
+                        <div class="upload-dropzone" id="upload-dropzone">
+                            <span class="upload-icon">📥</span>
+                            <h4>Drag & Drop Log Folder Here</h4>
+                            <p>or select manually by clicking the button below</p>
+                            <label for="folder-picker-client" class="btn btn-primary">
+                                📂 Choose Local Folder...
+                                <input type="file" id="folder-picker-client" webkitdirectory directory multiple
+                                    style="display: none;" />
+                            </label>
+                            <div id="selected-client-files-count" class="selected-files-count">No local folder selected.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <span id="explorer-selected-info" class="explorer-selected-info">Folder: <b>diag_trace</b></span>
+                <div class="footer-buttons">
+                    <button id="explorer-btn-cancel" class="btn btn-secondary">Cancel</button>
+                    <button id="explorer-btn-select" class="btn btn-primary">Confirm Selection</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast hidden">
+        <span class="toast-icon">✅</span>
+        <span id="toast-message">Database changes saved.</span>
+    </div>
+
+    <footer class="app-footer">
+        <p>&copy; 2026 DiagTrace Inc. All rights reserved. Professional Diagnostics Control Center.</p>
+    </footer>
+
+    <!-- Custom Frontend App Javascript -->
+    <script src="app.js?v=2.1.0"></script>
+</body>
+
+</html>
