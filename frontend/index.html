@@ -16,7 +16,7 @@
         <div class="header-logo">
             <span class="logo-icon">⚡</span>
             <span class="logo-text">Diag<span class="highlight">Trace</span></span>
-            <span class="version-badge">v2.1.0</span>
+            <span class="version-badge" id="version-badge">v2.1.0</span>
         </div>
         <div class="header-status">
             <span id="db-status" class="status-indicator connected">
@@ -26,57 +26,25 @@
     </header>
 
     <main class="app-container">
-        <!-- SECTION 1: INGESTION CONFIGURATION -->
-        <section class="card section-ingestion">
-            <div class="card-header">
-                <h2>📂 File Ingestion & Diagnostics Engine</h2>
-                <button id="btn-reset-db" class="btn btn-secondary btn-small"
-                    title="Reset current engine parsing state">
-                    🔄 Reset Parser
-                </button>
-            </div>
 
-            <div class="ingestion-controls">
-                <div class="input-group flex-fill">
-                    <label for="folder-path-input">Target Directory Path</label>
-                    <div class="input-with-action">
-                        <input type="text" id="folder-path-input"
-                            placeholder="Enter absolute folder path or browse..." />
-                        <button id="btn-browse-folder" class="btn btn-secondary" title="Browse and select folder">
-                            📂 Browse Folder...
-                        </button>
-                        <button id="btn-run-analysis" class="btn btn-primary" disabled>
-                            ▶️ Run Analysis
-                        </button>
-                    </div>
-                    <small class="helper-text">Specify where the raw vehicle log files (.txt) are located.</small>
-                </div>
-            </div>
-
-            <!-- LOG VIEWER: Box remains visible, scrolls log status, minimize option provided -->
-            <div id="log-console-container" class="log-console-container hidden">
-                <div class="console-header">
-                    <span>💻 Live Diagnostic Engine Output Logs</span>
-                    <div class="console-header-actions">
-                        <span id="console-spinner" class="spinner hidden"><span class="css-spinner"></span>
-                            Processing</span>
-                        <button id="btn-toggle-logs" class="btn-icon" title="Minimize/Maximize logs">➖</button>
-                    </div>
-                </div>
-                <div id="log-console" class="console-body">
-                    <div class="log-line system-msg">[SYSTEM] Diagnostic parser initialized. Ready to receive directory
-                        instructions.</div>
-                </div>
-            </div>
-        </section>
-
-        <!-- SECTION 2: RESULTS SECTION (TABLE FIRST, THEN CHARTS) -->
-        <section id="results-section" class="results-section hidden">
+        <!--  RESULTS SECTION (TABLE FIRST, THEN CHARTS) -->
+        <section id="results-section" class="results-section ">
 
             <!-- Global Diagnostic Registry Grid -->
             <div class="card grid-card">
                 <div class="card-header">
-                    <h2>📋 Diagnostic Data Detailed Report</h2>
+
+                    <div class="upload-status-group">
+                        <button id="btn-browse-folder" class="btn btn-small">+ Upload</button>
+                        <span id="console-spinner" class="spinner hidden">
+                            <span class="css-spinner"></span> Processing
+                        </span>
+                        <span><button id="btn-toggle-logs" class="btn-icon"
+                                title="Minimize/Maximize logs">-Status</button></span>
+                    </div>
+
+
+
                     <div class="header-actions">
                         <button id="btn-clear-filters" class="btn btn-secondary btn-small"
                             title="Clear all active column filters">
@@ -85,6 +53,21 @@
                         <button id="btn-export-excel" class="btn btn-success btn-small">
                             📄 Export to Excel
                         </button>
+                    </div>
+                </div>
+                <div id="log-console-container" class="log-console-container hidden">
+                    <div class="console-header">
+                        <span>💻 Live Diagnostic Engine Output Logs</span>
+                        <div class="console-header-actions">
+                            <span id="console-spinner" class="spinner hidden"><span class="css-spinner"></span>
+                                Processing</span>
+                            <button id="btn-toggle-logs" class="btn-icon" title="Minimize/Maximize logs">➖</button>
+                        </div>
+                    </div>
+                    <div id="log-console" class="console-body">
+                        <div class="log-line system-msg">[SYSTEM] Diagnostic parser initialized. Ready to receive
+                            directory
+                            instructions.</div>
                     </div>
                 </div>
 
@@ -160,6 +143,13 @@
                     </div>
                     <div class="kpi-icon red">🚨</div>
                 </div>
+                <div class="kpi-card">
+                    <div class="kpi-info">
+                        <span class="kpi-title">Active Modules</span>
+                        <h3 id="kpi-active-modules">0</h3>
+                    </div>
+                    <div class="kpi-icon orange">🧩</div>
+                </div>
             </div>
 
             <!-- Dashboard Charts -->
@@ -168,13 +158,15 @@
                     <h2>📊 Sumamry Dashboard</h2>
                 </div>
                 <div class="charts-row">
-                    <div class="chart-card">
+                    <div class="chart-card" id="top-dtc-card" data-chart-id="chart-top-dtc"
+                        data-dialog-title="Top 20 DTCs by Count">
                         <h3>Top 20 DTCs by Count</h3>
                         <div class="chart-wrapper">
                             <canvas id="chart-top-dtc"></canvas>
                         </div>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="top-modules-card" data-chart-id="chart-top-modules"
+                        data-dialog-title="Top Modules by DTC Count">
                         <h3>Top Modules by DTC Count</h3>
                         <div class="chart-wrapper">
                             <canvas id="chart-top-modules"></canvas>
@@ -182,17 +174,34 @@
                     </div>
                 </div>
                 <div class="charts-row">
-                    <div class="chart-card">
+                    <div class="chart-card" id="status-modules-card" data-chart-id="chart-status-modules"
+                        data-dialog-title="Module DTC Counts by Issue Status">
                         <h3>Module DTC Counts by Issue Status</h3>
                         <div class="chart-wrapper">
                             <canvas id="chart-status-modules"></canvas>
                         </div>
                     </div>
-                    <div class="chart-card">
+                    <div class="chart-card" id="program-distribution-card" data-chart-id="chart-program-distribution"
+                        data-dialog-title="DTC Distribution by Program Name">
                         <h3>DTC Distribution by Program Name</h3>
                         <div class="chart-wrapper">
                             <canvas id="chart-program-distribution"></canvas>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+
+            <!-- Common Chart Dialog for all charts -->
+
+            <div class="chart-dialog-overlay" id="chart-dialog-overlay">
+                <div class="chart-dialog">
+                    <div class="chart-dialog-header">
+                        <h3 id="chart-dialog-title">Chart Preview</h3>
+                        <button id="close-chart-dialog" class="close-dialog-btn">&times;</button>
+                    </div>
+                    <div class="dialog-chart-wrapper">
+                        <canvas id="chart-dialog-canvas"></canvas>
                     </div>
                 </div>
             </div>
@@ -219,7 +228,7 @@
                     <div class="explorer-address-bar">
                         <button id="explorer-nav-up" class="btn btn-icon" title="Up to parent folder">⬆️</button>
                         <button id="explorer-nav-home" class="btn btn-icon" title="Go to Project Root">🏠</button>
-                        <div id="explorer-current-path" class="current-path-display">C:\BK\07_web_apps\diag_trace</div>
+                        <input type="text" id="explorer-current-path" class="current-path-display">
                     </div>
                     <div class="explorer-layout">
                         <div class="explorer-sidebar">
@@ -261,7 +270,7 @@
                 <span id="explorer-selected-info" class="explorer-selected-info">Folder: <b>diag_trace</b></span>
                 <div class="footer-buttons">
                     <button id="explorer-btn-cancel" class="btn btn-secondary">Cancel</button>
-                    <button id="explorer-btn-select" class="btn btn-primary">Confirm Selection</button>
+                    <button id="explorer-btn-select" class="btn btn-primary">Confirm & Analyze</button>
                 </div>
             </div>
         </div>

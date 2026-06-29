@@ -19,16 +19,16 @@ let charts = {
     statusModules: null,
     programDist: null
 };
+let topDtcDialogChart = null;
 
 // DOM Elements Cache
 const elements = {
     dbStatus: document.getElementById('db-status'),
-    folderPathInput: document.getElementById('folder-path-input'),
     btnBrowseFolder: document.getElementById('btn-browse-folder'),
     folderPickerClient: document.getElementById('folder-picker-client'),
     btnRunAnalysis: document.getElementById('btn-run-analysis'),
     btnResetDb: document.getElementById('btn-reset-db'),
-    
+    versionBadge:document.getElementById("version-badge"),
     logConsoleContainer: document.getElementById('log-console-container'),
     logConsole: document.getElementById('log-console'),
     consoleSpinner: document.getElementById('console-spinner'),
@@ -40,6 +40,7 @@ const elements = {
     kpiTotalRecords: document.getElementById('kpi-total-records'),
     kpiUniqueDtcs: document.getElementById('kpi-unique-dtcs'),
     kpiActivePrograms: document.getElementById('kpi-active-programs'),
+    kpiActiveModules: document.getElementById('kpi-active-modules'),
     kpiOpenIssues: document.getElementById('kpi-open-issues'),
     
     // Table Header Row for Dynamic Headers
@@ -91,11 +92,26 @@ document.addEventListener('DOMContentLoaded', () => {
     initApp();
 });
 
+function loadAppVersion(){
+    fetch('/api/version')
+    .then(res => res.json())
+    .then(data => {
+        if(elements.versionBadge){
+        elements.versionBadge.innerText = data.version;
+        }
+    })
+    .catch(err => {
+        console.log("Failed to fetch version",err);
+    })
+}
+
+
 function initApp() {
     setupEventListeners();
     setupErrorLogging();
     checkEngineStatus();
     loadRegistryData();
+    loadAppVersion();
     
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
         if (appState.allData.length > 0) {
@@ -109,18 +125,26 @@ function initApp() {
 // ----------------------------------------------------
 function setupEventListeners() {
     // Ingestion controls
-    elements.folderPathInput.addEventListener('input', handleFolderPathChange);
+  
     elements.folderPickerClient.addEventListener('change', handleClientFolderSelected);
-    elements.btnRunAnalysis.addEventListener('click', startAnalysis);
-    elements.btnResetDb.addEventListener('click', resetParserEngine);
+
     elements.btnToggleLogs.addEventListener('click', toggleLogsMinimization);
     
     // Clear Filters Action
     elements.btnClearFilters.addEventListener('click', clearAllFilters);
+    elements.explorerCurrentPath.addEventListener('click', () => {
+        const path = elements.explorerCurrentPath.value;
+        if(path ){
+            fetchDirectoryContents(path);
+        }
+    });
+    elements.btnToggleLogs.addEventListener('click', toggleLogsMinimization);
+    elements.btnToggleLogs.classList.add('hidden');
+    
     
     // Event delegation for dynamic header column filters
     elements.tableHeadersRow.addEventListener('change', (e) => {
-        if (e.target.classList.contains('header-filter-select')) {
+        if (e.target.classList.contains('header-filter-select') || e.target.classList.contains('custom-dropdown')) {
             handleFilterChange();
         }
     });
@@ -180,6 +204,98 @@ function setupEventListeners() {
     });
     
     elements.uploadDropzone.addEventListener('drop', handleClientFolderDrop, false);
+
+    // Chart Dialog Event Listeners
+    document.querySelectorAll('.chart-card[data-chart-id]').forEach(card => {
+        card.addEventListener('click', function () {
+            const chartId = this.dataset.chartId;
+            const dialogTitle = this.dataset.dialogTitle;
+            openChartDialog(chartId, dialogTitle);
+        });
+    });
+
+    const closeChartDialogBtn = document.getElementById('close-chart-dialog');
+    const chartDialogOverlay = document.getElementById('chart-dialog-overlay');
+
+    if (closeChartDialogBtn) {
+        closeChartDialogBtn.addEventListener('click', function (event) {
+            event.stopPropagation();
+            closeChartDialog();
+        });
+    }
+
+    if (chartDialogOverlay) {
+        chartDialogOverlay.addEventListener('click', function (event) {
+            if (event.target === chartDialogOverlay) {
+                closeChartDialog();
+            }
+        });
+    }
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') {
+            closeChartDialog();
+        }
+    });
+
+    // open / close dropdown
+    document.addEventListener('click', (e) => {
+        const dropdown = e.target.closest('.custom-dropdown');
+        document.querySelectorAll('.dropdown-menu').forEach(menu => {
+            if (!dropdown || menu !== dropdown.querySelector('.dropdown-menu')) {
+                menu.classList.add('hidden');
+            }
+        });
+        if (dropdown) {
+            const isClickOnSelected = e.target.closest('.dropdown-selected');
+            if (isClickOnSelected) {
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (menu) {
+                    menu.classList.toggle('hidden');
+                }
+            }
+        }
+    });
+
+    // search inside dropdown
+    document.addEventListener('input', (e) => {
+        if (e.target.classList.contains('dropdown-search')) {
+            const value = e.target.value.toLowerCase();
+            const dropdownMenu = e.target.closest('.dropdown-menu');
+            if (dropdownMenu) {
+                const options = dropdownMenu.querySelectorAll('.dropdown-option');
+                options.forEach(opt => {
+                    opt.style.display = opt.innerText.toLowerCase().includes(value) ? 'block' : 'none';
+                });
+            }
+        }
+    });
+
+    // Select option
+    document.addEventListener('click', (e) => {
+        const option = e.target.closest('.dropdown-option');
+        if (option) {
+            const dropdown = option.closest('.custom-dropdown');
+            if (dropdown) {
+                const selected = dropdown.querySelector('.dropdown-selected');
+                if (selected) {
+                    selected.innerText = option.innerText;
+                    selected.dataset.value = option.dataset.value || option.innerText;
+                    
+                    // Dispatch a custom change event (with bubbles: true so event delegation catches it)
+                    const changeEvent = new CustomEvent('change', {
+                        bubbles: true,
+                        detail: { value: selected.dataset.value, text: option.innerText }
+                    });
+                    dropdown.dispatchEvent(changeEvent);
+                }
+                const menu = dropdown.querySelector('.dropdown-menu');
+                if (menu) {
+                    menu.classList.add('hidden');
+                }
+            }
+        }
+    });
 }
 
 // ----------------------------------------------------
@@ -191,6 +307,7 @@ function preventDefaults(e) {
 }
 
 function handleFolderPathChange() {
+    if (!elements.folderPathInput || !elements.btnRunAnalysis) return;
     const val = elements.folderPathInput.value.trim();
     if (val.length > 0) {
         elements.btnRunAnalysis.disabled = false;
@@ -207,8 +324,8 @@ function handleClientFolderSelected(e) {
             const folderName = relativePath.split('/')[0];
             const workspacePath = `C:\\DiagIngestTemp\\${folderName}`;
             
-            elements.folderPathInput.value = workspacePath;
             handleFolderPathChange();
+            appState.selectedFolderPath = workspacePath;
             
             elements.selectedClientFilesCount.innerText = `Selected Local Folder: "${folderName}" (${e.target.files.length} log files)`;
             elements.explorerSelectedInfo.innerHTML = `Folder (Client Upload): <b class="text-primary">${folderName}</b>`;
@@ -229,8 +346,7 @@ function handleClientFolderDrop(e) {
         const folderName = sampleFile.name || "DroppedFolder";
         const workspacePath = `C:\\DiagIngestTemp\\${folderName}`;
         
-        elements.folderPathInput.value = workspacePath;
-        handleFolderPathChange();
+        appState.selectedFolderPath = workspacePath;
         
         elements.selectedClientFilesCount.innerText = `Dropped Folder: "${folderName}" (${files.length} files detected)`;
         elements.explorerSelectedInfo.innerHTML = `Folder (Dropped Ingest): <b class="text-primary">${folderName}</b>`;
@@ -288,7 +404,8 @@ function fetchDirectoryContents(targetPath) {
         })
         .then(data => {
             appState.currentExplorerPath = data.current_path;
-            elements.explorerCurrentPath.innerText = data.current_path;
+            // elements.explorerCurrentPath.innerText = data.current_path;
+            elements.explorerCurrentPath.value = data.current_path;
             
             elements.explorerNavUp.disabled = !data.parent_path;
             elements.explorerNavUp.dataset.parent = data.parent_path || "";
@@ -345,10 +462,17 @@ function explorerNavigateUp() {
 function selectExplorerFolder() {
     const targetPath = elements.explorerBtnSelect.dataset.selectedPath;
     if (targetPath) {
-        elements.folderPathInput.value = targetPath;
-        handleFolderPathChange();
+      
+        appState.selectedFolderPath = targetPath;
+
         closeExplorerModal();
         showToast("Folder selected: " + getFolderName(targetPath));
+
+        elements.consoleSpinner.classList.remove("hidden");
+        elements.logConsoleContainer.classList.remove("hidden");
+
+        elements.btnToggleLogs.classList.remove('hidden');
+        startAnalysis();
     }
 }
 
@@ -361,11 +485,11 @@ function toggleLogsMinimization() {
     
     if (container.classList.contains('minimized')) {
         container.classList.remove('minimized');
-        btn.innerText = "➖";
+        btn.innerText = "➖Status" ;
         btn.title = "Minimize logs";
     } else {
         container.classList.add('minimized');
-        btn.innerText = "➕";
+        btn.innerText = "➕Status";
         btn.title = "Maximize logs";
     }
 }
@@ -382,14 +506,19 @@ function checkEngineStatus() {
         })
         .then(status => {
             if (status.is_processing) {
-                elements.folderPathInput.value = status.current_folder || "";
+                if (elements.folderPathInput) {
+                    elements.folderPathInput.value = status.current_folder || "";
+                }
                 handleFolderPathChange();
+                appState.selectedFolderPath = status.current_folder || "";
                 elements.logConsoleContainer.classList.remove('hidden');
                 elements.consoleSpinner.classList.remove('hidden');
+                elements.btnToggleLogs.classList.remove('hidden');
                 startPollingLogs();
             } else if (status.processing_complete) {
                 elements.logConsoleContainer.classList.remove('hidden');
                 elements.consoleSpinner.classList.add('hidden');
+                 elements.btnToggleLogs.classList.remove('hidden');
                 updateLogConsole(status.logs);
             }
         })
@@ -436,23 +565,32 @@ function loadRegistryData() {
                 buildHeaderFiltersMarkup();
                 applyFilters();
             } else {
-                elements.resultsSection.classList.add('hidden');
+                // elements.resultsSection.classList.add('hidden');
+                elements.registryTableBody.innerHTML =`
+                <tr> 
+                    <td colspan ="10" class = "no-data-msg">No Data Available</td>
+                </tr>
+                `
             }
         })
         .catch(err => logErrorToConsole("Load Diagnostics Data", err));
 }
 
 function startAnalysis() {
-    const folderPath = elements.folderPathInput.value.trim();
+    const folderPath = (appState.selectedFolderPath || " ").trim();
     if (!folderPath) return;
     
     elements.logConsoleContainer.classList.remove('hidden');
     elements.logConsoleContainer.classList.remove('minimized');
-    elements.btnToggleLogs.innerText = "➖";
-    
+   
+
+    elements.btnBrowseFolder.classList.add("hidden");
+    elements.consoleSpinner.classList.remove("hidden");
+    elements.btnToggleLogs.classList.remove("hidden");
+     elements.btnToggleLogs.innerText = "➖ Status";
     elements.logConsole.innerHTML = `<div class="log-line system-msg">[SYSTEM] Connecting to backend engine for parsing '${folderPath}'...</div>`;
     elements.consoleSpinner.classList.remove('hidden');
-    elements.btnRunAnalysis.disabled = true;
+    //elements.btnRunAnalysis.disabled = true;
     
     fetch('/api/start-parse', {
         method: 'POST',
@@ -472,7 +610,7 @@ function startAnalysis() {
             startPollingLogs();
         } else {
             elements.consoleSpinner.classList.add('hidden');
-            elements.btnRunAnalysis.disabled = false;
+            
             appendLogLine({ message: "Failed to initiate parsing engine.", level: "error", time: "" });
         }
     })
@@ -480,6 +618,8 @@ function startAnalysis() {
         elements.consoleSpinner.classList.add('hidden');
         elements.btnRunAnalysis.disabled = false;
         logErrorToConsole("Start Analysis Engine", err);
+        elements.consoleSpinner.classList.add("hidden");
+        elements.btnBrowseFolder.classList.remove("hidden");
     });
 }
 
@@ -504,7 +644,8 @@ function startPollingLogs() {
                     clearInterval(appState.pollIntervalId);
                     appState.isPolling = false;
                     elements.consoleSpinner.classList.add('hidden');
-                    elements.btnRunAnalysis.disabled = false;
+                    elements.consoleSpinner.classList.add('hidden');
+                    elements.btnBrowseFolder.classList.remove('hidden');
                     
                     if (status.error_message) {
                         showToast(`Analysis error: ${status.error_message}`, "error");
@@ -520,7 +661,7 @@ function startPollingLogs() {
                 clearInterval(appState.pollIntervalId);
                 appState.isPolling = false;
                 elements.consoleSpinner.classList.add('hidden');
-                elements.btnRunAnalysis.disabled = false;
+              //  elements.btnRunAnalysis.disabled = false;
             });
     }, 800);
 }
@@ -563,6 +704,7 @@ function resetParserEngine() {
                 elements.logConsole.innerHTML = "";
                 elements.folderPathInput.value = "";
                 elements.btnRunAnalysis.disabled = true;
+                appState.selectedFolderPath = "";
                 
                 elements.selectedClientFilesCount.innerText = "No local folder selected.";
                 showToast("Parser state reset successfully.");
@@ -648,12 +790,22 @@ function buildHeaderFiltersMarkup() {
                 // Generate sorted unique values for select options
                 const uniqueVals = [...new Set(appState.allData.map(item => item[col]).filter(Boolean))].sort();
                 
-                let options = `<option value="">All</option>`;
+                let optionsHtml = `<div class="dropdown-option" data-value="">All</div>`;
                 uniqueVals.forEach(val => {
-                    options += `<option value="${val}">${val}</option>`;
+                    optionsHtml += `<div class="dropdown-option" data-value="${val}">${val}</div>`;
                 });
                 
-                filterControl = `<select data-col="${col}" class="header-filter-select">${options}</select>`;
+                filterControl = `
+                    <div class="custom-dropdown" data-col="${col}">
+                        <div class="dropdown-selected" data-value="">All</div>
+                        <div class="dropdown-menu hidden">
+                            <input type="text" class="dropdown-search" placeholder="Search..." />
+                            <div class="dropdown-options-list">
+                                ${optionsHtml}
+                            </div>
+                        </div>
+                    </div>
+                `;
             }
         }
         
@@ -673,7 +825,12 @@ function handleFilterChange() {
         
         const control = elements.tableHeadersRow.querySelector(`[data-col="${col}"]`);
         if (control) {
-            appState.filters[col] = control.value;
+            if (control.classList.contains('custom-dropdown')) {
+                const selected = control.querySelector('.dropdown-selected');
+                appState.filters[col] = selected ? (selected.dataset.value || "") : "";
+            } else {
+                appState.filters[col] = control.value;
+            }
         }
     });
     
@@ -720,7 +877,15 @@ function clearAllFilters() {
         
         const control = elements.tableHeadersRow.querySelector(`[data-col="${col}"]`);
         if (control) {
-            control.value = "";
+            if (control.classList.contains('custom-dropdown')) {
+                const selected = control.querySelector('.dropdown-selected');
+                if (selected) {
+                    selected.innerText = "All";
+                    selected.dataset.value = "";
+                }
+            } else {
+                control.value = "";
+            }
         }
         appState.filters[col] = "";
     });
@@ -740,8 +905,10 @@ function updateKPIs() {
     // Find active programs / open issues safely in case key names change slightly
     const programColName = appState.columns.find(c => c.toLowerCase().includes("program")) || "Program name";
     const statusColName = appState.columns.find(c => c.toLowerCase().includes("status")) || "Issue Status";
+    const moduleColName = appState.columns.find(c => c.toLowerCase() === "module") || "Module";
     
     const activeProgs = new Set(appState.filteredData.map(r => r[programColName]).filter(Boolean)).size;
+    const activeModules = new Set(appState.filteredData.map(r => r[moduleColName]).filter(Boolean)).size;
     const openIssues = appState.filteredData.filter(r => {
         const val = String(r[statusColName] || '').toLowerCase();
         return val === 'open' || val === 'new';
@@ -750,6 +917,9 @@ function updateKPIs() {
     elements.kpiTotalRecords.innerText = total.toLocaleString();
     elements.kpiUniqueDtcs.innerText = uniqueDtcs.toString();
     elements.kpiActivePrograms.innerText = activeProgs.toString();
+    if (elements.kpiActiveModules) {
+        elements.kpiActiveModules.innerText = activeModules.toString();
+    }
     elements.kpiOpenIssues.innerText = openIssues.toString();
 }
 
@@ -798,7 +968,7 @@ function renderGridAndPagination() {
     elements.paginationInfoText.innerHTML = `Showing <b>${startIdx + 1}</b>-<b>${endIdx}</b> of <b>${total.toLocaleString()}</b> entries`;
     
     const pageData = appState.filteredData.slice(startIdx, endIdx);
-    const statusOptions = ['New', 'Open', 'In Progress', 'Closed', 'Under Investigation'];
+    const statusOptions = ['New', 'Known', 'Not an Issue', 'Fixed', 'Needs Investigation'];
     
     pageData.forEach(row => {
         const tr = document.createElement('tr');
@@ -812,7 +982,7 @@ function renderGridAndPagination() {
             // Editable Column 1: Issue Status
             if (col === "Issue Status") {
                 td.className = "editable-cell";
-                const statusClass = String(cellValue).toLowerCase().replace(' ', '-');
+                const statusClass = String(cellValue).toLowerCase().replace('/\s+/g', '-');
                 td.innerHTML = `<span class="status-tag ${statusClass}">${cellValue}</span>`;
                 td.addEventListener('dblclick', () => editStatusCell(td, row.index, cellValue, statusOptions));
             } 
@@ -872,7 +1042,7 @@ function editStatusCell(td, rowIndex, currentVal, options) {
         if (newVal !== currentVal) {
             saveRowUpdate(rowIndex, { Issue_Status: newVal });
         } else {
-            const statusClass = newVal.toLowerCase().replace(' ', '-');
+            const statusClass = newVal.toLowerCase().replace('/\s+/g', '-');
             td.innerHTML = `<span class="status-tag ${statusClass}">${newVal}</span>`;
         }
     };
@@ -882,13 +1052,15 @@ function editStatusCell(td, rowIndex, currentVal, options) {
 }
 
 function editTextFieldCell(td, rowIndex, fieldName, currentVal) {
-    if (td.querySelector('input')) return;
+    if (td.querySelector('textarea')) return;
     
-    const input = document.createElement('input');
-    input.type = "text";
+    const input = document.createElement('textarea');
+    input.type = "cell-textarea";
     input.className = "cell-input";
     input.value = currentVal;
-    
+    input.rows = 3;
+    input.style.resize = "vertical";
+
     td.innerHTML = "";
     td.appendChild(input);
     input.focus();
@@ -906,9 +1078,11 @@ function editTextFieldCell(td, rowIndex, fieldName, currentVal) {
     
     input.addEventListener('blur', commitChange);
     input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             commitChange();
-        } else if (e.key === 'Escape') {
+        }
+        if (e.key === 'Escape') {
             td.innerText = currentVal;
         }
     });
@@ -1029,8 +1203,19 @@ function renderCharts() {
     const dtcLabels = dtcCounts.map(x => x[0]);
     const dtcValues = dtcCounts.map(x => x[1]);
     
-    if (charts.topDtc) charts.topDtc.destroy();
-    charts.topDtc = new Chart(document.getElementById('chart-top-dtc'), {
+   const topDtcCanvas = document.getElementById('chart-top-dtc');
+   if(topDtcCanvas){
+    const existingTopDtcChart = Chart.getChart('chart-top-dtc');
+    
+    
+    if( existingTopDtcChart){
+        existingTopDtcChart.destroy();
+    }  
+    if(charts.topDtc){
+        charts.topDtc = null;  
+    }
+
+    charts.topDtc = new Chart(topDtcCanvas, {
         type: 'bar',
         data: {
             labels: dtcLabels,
@@ -1055,6 +1240,7 @@ function renderCharts() {
             }
         }
     });
+   }
 
     // Chart 2: Top Modules by DTC Count
     const modCounts = getCounts(moduleCol, 10);
@@ -1090,7 +1276,7 @@ function renderCharts() {
 
     // Chart 3: Horizontal Stacked Bar Chart
     const modules = [...new Set(data.map(item => item[moduleCol]).filter(Boolean))];
-    const statuses = ['New', 'Open', 'In Progress', 'Closed', 'Under Investigation'];
+    const statuses = [...new Set(data.map(item => item[statusCol]).filter(Boolean))];
     
     const statusMapByModule = {};
     modules.forEach(m => {
@@ -1109,22 +1295,28 @@ function renderCharts() {
     const sortedModules = modules.map(m => {
         const sum = Object.values(statusMapByModule[m]).reduce((a, b) => a + b, 0);
         return { name: m, total: sum };
-    }).sort((a, b) => b.total - a.total).map(x => x.name).slice(0, 10);
+    }).sort((a, b) => b.total - a.total).map(x => x.name);
+
+    const barHeight = 28; // px per module 
+    const dynamicHeight = sortedModules.length*barHeight;
+    const chartCanvas = document.getElementById('chart-status-modules');
+    const chartWrapper = chartCanvas.parentElement;
+
     
     const datasets = [
         { label: 'New', data: [], backgroundColor: 'rgba(59, 130, 246, 0.7)', stack: 'Status' },
-        { label: 'Open', data: [], backgroundColor: 'rgba(6, 182, 212, 0.7)', stack: 'Status' },
-        { label: 'In Progress', data: [], backgroundColor: 'rgba(245, 158, 11, 0.7)', stack: 'Status' },
-        { label: 'Closed', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', stack: 'Status' },
-        { label: 'Under Investigation', data: [], backgroundColor: 'rgba(167, 139, 250, 0.7)', stack: 'Status' }
+        { label: 'Known', data: [], backgroundColor: 'rgba(6, 182, 212, 0.7)', stack: 'Status' },
+        { label: 'Not an Issue', data: [], backgroundColor: 'rgba(245, 158, 11, 0.7)', stack: 'Status' },
+        { label: 'Fixed', data: [], backgroundColor: 'rgba(16, 185, 129, 0.7)', stack: 'Status' },
+        { label: 'Needs Investigation', data: [], backgroundColor: 'rgba(167, 139, 250, 0.7)', stack: 'Status' }
     ];
     
     sortedModules.forEach(m => {
         datasets[0].data.push(statusMapByModule[m]['New']);
-        datasets[1].data.push(statusMapByModule[m]['Open']);
-        datasets[2].data.push(statusMapByModule[m]['In Progress']);
-        datasets[3].data.push(statusMapByModule[m]['Closed']);
-        datasets[4].data.push(statusMapByModule[m]['Under Investigation']);
+        datasets[1].data.push(statusMapByModule[m]['Known']);
+        datasets[2].data.push(statusMapByModule[m]['Not an Issue']);
+        datasets[3].data.push(statusMapByModule[m]['Fixed']);
+        datasets[4].data.push(statusMapByModule[m]['Needs Investigation']);
     });
     
     if (charts.statusModules) charts.statusModules.destroy();
@@ -1274,4 +1466,55 @@ function logErrorToConsole(errContext, err) {
         level: "error",
         time: new Date().toTimeString().split(' ')[0]
     });
+}
+
+// graph dialogue controls
+let activeDialogChart = null;
+
+function openChartDialog(sourceCanvasId, dialogTitle) {
+    const overlay = document.getElementById('chart-dialog-overlay');
+    const dialogCanvas = document.getElementById('chart-dialog-canvas');
+    const titleElement = document.getElementById('chart-dialog-title');
+
+    if (!overlay || !dialogCanvas || !titleElement) {
+        console.error('Chart dialog elements not found.');
+        return;
+    }
+
+    const sourceChart = Chart.getChart(sourceCanvasId);
+    if (!sourceChart) {
+        console.warn(`Chart is not ready yet: ${sourceCanvasId}`);
+        return;
+    }
+
+    titleElement.innerText = dialogTitle || 'Chart Preview';
+    overlay.style.display = 'flex';
+
+    const existingDialogChart = Chart.getChart('chart-dialog-canvas');
+    if (existingDialogChart) {
+        existingDialogChart.destroy();
+    }
+
+    const sourceOptions = JSON.parse(JSON.stringify(sourceChart.options || {}));
+    sourceOptions.responsive = true;
+    sourceOptions.maintainAspectRatio = false;
+
+    activeDialogChart = new Chart(dialogCanvas, {
+        type: sourceChart.config.type,
+        data: JSON.parse(JSON.stringify(sourceChart.data)),
+        options: sourceOptions
+    });
+}
+
+function closeChartDialog() {
+    const overlay = document.getElementById('chart-dialog-overlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+    
+    const existingDialogChart = Chart.getChart('chart-dialog-canvas');
+    if (existingDialogChart) {
+        existingDialogChart.destroy();
+    }
+    activeDialogChart = null;
 }
