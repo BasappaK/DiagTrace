@@ -138,6 +138,11 @@ def get_data():
         return {"data": []}
     return {"data": df.reset_index().to_dict(orient="records")}
 
+
+@app.get("/api/version")
+def get_version():
+    return {"version": API_VERSION}
+
 @app.post("/api/update-row")
 def update_row_endpoint(payload: UpdateRowRequest):
     try:

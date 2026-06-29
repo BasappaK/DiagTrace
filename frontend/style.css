@@ -10,6 +10,8 @@
     --text-primary: #0f172a;
     --text-secondary: #475569;
     --text-muted: #94a3b8;
+    --upload-btn-bgc:#25636b;
+    --upload-btn-text:white;
 
     --primary: #2563eb;
     --primary-hover: #1d4ed8;
@@ -18,8 +20,9 @@
     --warning: #d97706;
     --error: #e11d48;
     --info: #0891b2;
-    --bg-console: #0f172a;
-    --text-console: #e2e8f0;
+    --bg-console: white;
+    --text-console: black;
+
 
     --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     --font-mono: Consolas, "Courier New", monospace;
@@ -44,6 +47,8 @@
         --text-primary: #f8fafc;
         --text-secondary: #94a3b8;
         --text-muted: #64748b;
+        --upload-btn-bgc:white;
+        --upload-btn-text:black;
 
         --primary: #3b82f6;
         --primary-hover: #2563eb;
@@ -392,7 +397,7 @@ body {
 }
 
 .log-line.info {
-    color: #38bdf8;
+    color: var(--text-console);
 }
 
 .log-line.warning {
@@ -448,7 +453,8 @@ body {
 .table-container {
     overflow-x: auto;
     max-height: 400px;
-    overflow-y: auto;
+    min-height: 260px; /* Ensure enough height for custom dropdown menus when table has little/no data */
+    overflow-y: visible;
     position: relative;
     border-bottom: 1px solid var(--border-color);
 }
@@ -472,8 +478,12 @@ body {
     vertical-align: top;
     white-space: nowrap;
     max-width: 240px;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    overflow: visible; /* Allow dropdowns to overflow the th boundary */
+}
+
+/* Raise z-index of the sticky th when its custom dropdown menu is open */
+.data-table th:has(.dropdown-menu:not(.hidden)) {
+    z-index: 100;
 }
 
 /* Column Filter Input / Dropdown */
@@ -482,6 +492,9 @@ body {
     font-weight: 700;
     color: var(--text-primary);
     margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .header-filter-select,
@@ -622,35 +635,54 @@ body {
 /* Status specific tags */
 .status-tag {
     display: inline-flex;
-    padding: 1px 6px;
+    padding: 2px 6px;
     border-radius: 4px;
     font-size: 0.68rem;
     font-weight: 600;
+    text-transform: capitalize;
+    /* Default neutral fallback badge */
+    background-color: rgba(148, 163, 184, 0.12);
+    color: var(--text-secondary);
+    border: 1px solid rgba(148, 163, 184, 0.2);
 }
 
-.status-tag.new {
+.status-tag.new,
+.status-tag.open {
     background-color: rgba(59, 130, 246, 0.1);
     color: var(--primary);
+    border-color: rgba(59, 130, 246, 0.2);
 }
 
-.status-tag.open {
+.status-tag.known {
     background-color: rgba(6, 182, 212, 0.1);
+    color: #8b5cf6;
+    border-color: rgba(6, 182, 212, 0.2);
+}
+
+.status-tag.not-an-issue {
+    background-color: rgba(245, 158, 11, 0.1);
     color: var(--info);
+    border-color: rgba(245, 158, 11, 0.2);
 }
 
 .status-tag.in-progress {
     background-color: rgba(245, 158, 11, 0.1);
-    color: var(--warning);
+    color: #d97706;
+    border-color: rgba(245, 158, 11, 0.2);
 }
 
+.status-tag.fixed,
 .status-tag.closed {
     background-color: rgba(16, 185, 129, 0.1);
     color: var(--success);
+    border-color: rgba(16, 185, 129, 0.2);
 }
 
+.status-tag.needs-investigation,
 .status-tag.under-investigation {
     background-color: rgba(167, 139, 250, 0.1);
-    color: #8b5cf6;
+    color: #7c3aed;
+    border-color: rgba(167, 139, 250, 0.2);
 }
 
 /* Pagination Controls */
@@ -695,7 +727,7 @@ body {
 /* KPI metric cards */
 .kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 12px;
 }
 
@@ -753,6 +785,11 @@ body {
     color: var(--error);
 }
 
+.kpi-icon.orange {
+    background-color: rgba(249, 115, 22, 0.08);
+    color: #f97316;
+}
+
 /* Dashboard Charts Grid */
 .charts-section {
     display: flex;
@@ -771,6 +808,7 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 12px;
+    height:35vh;
     box-shadow: var(--shadow-sm);
 }
 
@@ -789,6 +827,11 @@ body {
     position: relative;
     height: 200px;
     width: 100%;
+    max-height: 400px;
+    overflow-y: auto;
+}
+.chart-wrapper canvas{
+    display: block;
 }
 
 /* Modal Folder Explorer Layout with Tabs */
@@ -1114,3 +1157,154 @@ body {
 .hidden {
     display: none !important;
 }
+
+.chart-card {
+    cursor: pointer;
+}
+
+.chart-dialog-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.65);
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-dialog {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    width: 85vw;
+    height: 80vh;
+    max-width: 1200px;
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-sans);
+    transition: var(--transition);
+}
+
+.chart-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.chart-dialog-header h3 {
+    margin: 0;
+}
+
+.close-dialog-btn {
+    border: none;
+    background: transparent;
+    font-size: 32px;
+    line-height: 1;
+    cursor: pointer;
+    color: #334155;
+}
+
+.close-dialog-btn:hover {
+    color: #dc2626;
+}
+
+.dialog-chart-wrapper {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+}
+
+.dialog-chart-wrapper canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+#upload-btn {
+    background-color: rgb(85, 85, 158);
+    color: white;
+    width: 75px;
+    border: 2px solid;
+    border-radius: 10px;
+}
+
+#btn-browse-folder {
+    background: linear-gradient(135deg, var(--primary) 0%, #2563eb 100%);
+    color: white;
+    font-weight: 600;
+    padding: 5px 14px;
+    border: none;
+    border-radius: 6px;
+    box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+}
+
+#btn-browse-folder:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+}
+
+#btn-browse-folder:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
+}
+
+.no-data {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+custom-dropdown, .custom-dropdown {
+    position: relative;
+    font-size: 0.7rem;
+}
+
+.dropdown-selected {
+    padding: 3px 6px;
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    background: var(--bg-card);
+}
+
+.dropdown-menu {
+    position: absolute;
+    width: 100%;
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    z-index: 9999;
+    min-width: 100%;
+    /* at least column width */
+    width: max-content;
+    /* expand based on content */
+    max-width: 400px;
+    /* limit so it doesn't go crazy */
+    white-space: nowrap;
+    /* prevent wrapping */
+}
+
+.dropdown-search {
+    width: 100%;
+    padding: 4px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.dropdown-option {
+    padding: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.dropdown-option:hover{
+    background: rgba(0, 0, 0, 0.05);
+}
+
+
